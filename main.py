@@ -1,63 +1,54 @@
 #!/usr/bin/env python3
-"""small-good-thing: write one line about a small good thing today.
+"""Write one line about a small good thing that happened today.
 
-The line is a single sentence about a small good thing that happened
-today, written to /output/entry.txt. It shows the moment instead of
-explaining it: a named place, a named thing, and a turn the reader did
-not see coming.
-
-Standard library only, no network. Deterministic: the same bytes on
-every run.
+The program does one thing: it drops a single sentence into
+/output/entry.txt. The sentence is about a parcel left with a
+neighbour, brought back with a cake still warm from the oven, two
+slices already missing. The line is checked before it is written:
+at most 200 characters, one line, no leading or trailing space.
+Standard library only, no network, and the
+file it writes is byte-identical on every run.
 """
 
 import os
 import sys
 
-LINE = (
-    "A kid on the platform pointed at my red scarf and shouted 'Santa!' "
-    "\u2014 it's November, and I laughed all the way home."
-)
+ENTRY = "The postman left my parcel with my neighbour, and she brought it round with a cake still warm from her oven — two slices already missing."
 
-MIN_LEN = 1
-MAX_LEN = 200
+LIMIT = 200
 
 
-def problems(text: str) -> list:
-    """Return every gate violation for the entry text (empty means valid)."""
-    found = []
-    if not (MIN_LEN <= len(text) <= MAX_LEN):
-        found.append(f"entry is {len(text)} characters, must be {MIN_LEN}-{MAX_LEN}")
-    stripped = text.strip()
-    if not stripped:
-        found.append("entry must not be only white space")
-    if text != stripped:
-        found.append("entry must not start or end with white space")
-    if "\n" in text or "\r" in text:
-        found.append("entry must be a single line")
-    return found
+def check(line: str) -> list:
+    """Collect every reason the line would be rejected, if any."""
+    faults = []
+    if len(line) > LIMIT:
+        faults.append(f"line is {len(line)} characters, over the {LIMIT} limit")
+    if line != line.strip():
+        faults.append("line starts or ends with whitespace")
+    if not line.strip():
+        faults.append("line is empty")
+    if "\n" in line or "\r" in line:
+        faults.append("line must fit on one line")
+    return faults
 
 
 def main() -> int:
-    text = LINE
-    bad = problems(text)
-    if bad:
-        for item in bad:
-            print(item, file=sys.stderr)
+    faults = check(ENTRY)
+    if faults:
+        print("\n".join(faults), file=sys.stderr)
         return 1
-    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR") or "/output"
-    os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, "entry.txt")
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(text)
-    try:
-        os.chmod(path, 0o644)
-    except OSError:
-        pass
-    with open(path, "rb") as f:
-        if f.read() != text.encode("utf-8"):
-            print("entry.txt does not match the line", file=sys.stderr)
+    directory = os.environ.get("MAKEFUN_OUTPUT_DIR") or "/output"
+    os.makedirs(directory, exist_ok=True)
+    target = os.path.join(directory, "entry.txt")
+    data = ENTRY.encode("utf-8")
+    with open(target, "wb") as handle:
+        handle.write(data)
+    os.chmod(target, 0o644)
+    with open(target, "rb") as handle:
+        if handle.read() != data:
+            print("entry.txt differs from the line", file=sys.stderr)
             return 1
-    print(f"wrote {len(text)} characters to {path}")
+    print(f"wrote {len(ENTRY)} characters to {target}")
     return 0
 
 
