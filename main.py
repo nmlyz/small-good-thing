@@ -1,56 +1,74 @@
 #!/usr/bin/env python3
-"""Write one line about a small good thing that happened today.
+"""Drop one sentence about a small good thing into /output/entry.txt.
 
-The program does one thing: it drops a single sentence into
-/output/entry.txt. The sentence is about a parcel left with a
-neighbour, brought back with a cake still warm from the oven, two
-slices already missing. The line is checked before it is written:
-at most 200 characters, one line, no leading or trailing space.
-Standard library only, no network, and the
-file it writes is byte-identical on every run.
+The sentence is the whole program: a toddler on the morning train
+sharing half a biscuit, as solemn as a treaty, and waiting until the
+bite is taken. Nothing is fetched, nothing is random, and the file
+that comes out is the same every single time.
+
+Only the standard library is used. The sentence is measured before
+anything is written: a single line, no more than two hundred
+characters, with something in it besides blank space.
 """
 
+import hashlib
 import os
 import sys
+from pathlib import Path
 
-ENTRY = "The postman left my parcel with my neighbour, and she brought it round with a cake still warm from her oven — two slices already missing."
+SENTENCE = (
+    "A toddler on the 7:04 train offered me half her biscuit, "
+    "solemn as a treaty, and waited until I took a bite."
+)
 
-LIMIT = 200
-
-
-def check(line: str) -> list:
-    """Collect every reason the line would be rejected, if any."""
-    faults = []
-    if len(line) > LIMIT:
-        faults.append(f"line is {len(line)} characters, over the {LIMIT} limit")
-    if line != line.strip():
-        faults.append("line starts or ends with whitespace")
-    if not line.strip():
-        faults.append("line is empty")
-    if "\n" in line or "\r" in line:
-        faults.append("line must fit on one line")
-    return faults
+MAX_CHARS = 200
+DEST_NAME = "entry.txt"
 
 
-def main() -> int:
-    faults = check(ENTRY)
-    if faults:
-        print("\n".join(faults), file=sys.stderr)
+def output_folder() -> Path:
+    """Where the entry goes: $MAKEFUN_OUTPUT_DIR, else /output."""
+    raw = os.environ.get("MAKEFUN_OUTPUT_DIR", "")
+    return Path(raw) if raw.strip() else Path("/output")
+
+
+def validate(sentence: str) -> None:
+    """Refuse to write a sentence the gate would refuse."""
+    if not sentence.strip():
+        raise ValueError("the sentence is blank")
+    if "\n" in sentence or "\r" in sentence:
+        raise ValueError("the sentence must stay on one line")
+    if sentence != sentence.strip():
+        raise ValueError("the sentence starts or ends with a space")
+    if len(sentence) > MAX_CHARS:
+        raise ValueError(
+            f"the sentence is {len(sentence)} characters, "
+            f"over the {MAX_CHARS} limit"
+        )
+
+
+def render(sentence: str, folder: Path) -> Path:
+    """Write the sentence and prove the file holds exactly it."""
+    payload = sentence.encode("utf-8")
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / DEST_NAME
+    target.write_bytes(payload)
+    target.chmod(0o644)
+    written = target.read_bytes()
+    if hashlib.sha256(written).hexdigest() != hashlib.sha256(payload).hexdigest():
+        raise ValueError("what was written does not match the sentence")
+    return target
+
+
+def main(argv: list[str]) -> int:
+    try:
+        validate(SENTENCE)
+        target = render(SENTENCE, output_folder())
+    except (ValueError, OSError) as problem:
+        print(f"cannot write the entry: {problem}", file=sys.stderr)
         return 1
-    directory = os.environ.get("MAKEFUN_OUTPUT_DIR") or "/output"
-    os.makedirs(directory, exist_ok=True)
-    target = os.path.join(directory, "entry.txt")
-    data = ENTRY.encode("utf-8")
-    with open(target, "wb") as handle:
-        handle.write(data)
-    os.chmod(target, 0o644)
-    with open(target, "rb") as handle:
-        if handle.read() != data:
-            print("entry.txt differs from the line", file=sys.stderr)
-            return 1
-    print(f"wrote {len(ENTRY)} characters to {target}")
+    print(f"entry written: {target} ({len(SENTENCE)} characters)")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))
